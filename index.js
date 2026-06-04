@@ -1,17 +1,20 @@
-const dns = require("node:dns");
-dns.setServers(["8.8.8.8", "8.8.4.4"]);
-
-
 const express = require('express');
 const { MongoClient, ServerApiVersion } = require('mongodb');
 const dotenv = require('dotenv');
 dotenv.config();
 const cors = require('cors');
+
 const uri = process.env.MONGODB_URI;
 const app = express();
-const port = 5000 || process.env.PORT;
+const port = process.env.PORT || 5000;
 
-app.use(cors());
+// Enhanced CORS configuration
+app.use(cors({
+    origin: ['http://localhost:3000', 'http://localhost:3001'], // Your Next.js app port
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization']
+}));
 app.use(express.json());
 
 const client = new MongoClient(uri, {
@@ -21,27 +24,43 @@ const client = new MongoClient(uri, {
         deprecationErrors: true,
     }
 });
+
 async function run() {
     try {
-        // Connect the client to the server	(optional starting in v4.7)
         await client.connect();
         const db = client.db("wanderlast");
         const destinationsCollection = db.collection("destinations");
 
+        // POST endpoint
         app.post('/destinations', async (req, res) => {
-            const destination = req.body;
-            const result = await destinationsCollection.insertOne(destination);
-            res.json(result);
-        })
+            try {
+                const destination = req.body;
+                const result = await destinationsCollection.insertOne(destination);
+                res.status(201).json(result);
+            } catch (error) {
+                console.error('Error inserting destination:', error);
+                res.status(500).json({ error: error.message });
+            }
+        });
 
-        // Send a ping to confirm a successful connection
+        // GET all destinations endpoint (optional - for testing)
+        app.get('/destinations', async (req, res) => {
+            try {
+                const destinations = await destinationsCollection.find().toArray();
+                res.json(destinations);
+            } catch (error) {
+                res.status(500).json({ error: error.message });
+            }
+        });
+
         await client.db("admin").command({ ping: 1 });
-        console.log("Pinged your deployment. You successfully connected to MongoDB!");
-    } finally {
-        // Ensures that the client will close when you finish/error
-        await client.close();
+        console.log("Successfully connected to MongoDB!");
+        
+    } catch (error) {
+        console.error('Database connection error:', error);
     }
 }
+
 run().catch(console.dir);
 
 app.get('/', (req, res) => {
@@ -49,5 +68,5 @@ app.get('/', (req, res) => {
 });
 
 app.listen(port, () => {
-    console.log(`Server is running on port ${port}`);
+    console.log(`Server is running on http://localhost:${port}`);
 });
